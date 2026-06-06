@@ -69,13 +69,13 @@ h1 {
 (() => {
   let actx = null;
   function ctx() {
-    if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
-    if (actx.state === 'suspended') actx.resume();
+    if (!actx) { try { actx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) { return null; } }
+    if (actx && actx.state === 'suspended') actx.resume();
     return actx;
   }
 
   function vineBoom() {
-    const c=ctx(),t=c.currentTime,osc=c.createOscillator(),g=c.createGain();
+    const c=ctx();if(!c)return;const t=c.currentTime,osc=c.createOscillator(),g=c.createGain();
     osc.connect(g);g.connect(c.destination);osc.type='sine';
     osc.frequency.setValueAtTime(85,t);osc.frequency.exponentialRampToValueAtTime(30,t+.65);
     g.gain.setValueAtTime(1.5,t);g.gain.exponentialRampToValueAtTime(0.001,t+.65);
@@ -83,7 +83,7 @@ h1 {
   }
 
   function airhorn() {
-    const c=ctx(),t=c.currentTime;
+    const c=ctx();if(!c)return;const t=c.currentTime;
     [[880,.25],[1100,.22],[1320,.18]].forEach(([freq,vol],i)=>{
       const osc=c.createOscillator(),g=c.createGain();
       osc.connect(g);g.connect(c.destination);osc.type='sawtooth';osc.frequency.value=freq;
@@ -93,7 +93,7 @@ h1 {
   }
 
   function baDumTss() {
-    const c=ctx();
+    const c=ctx();if(!c)return;
     [0,.22].forEach(d=>{
       const t=c.currentTime+d,osc=c.createOscillator(),g=c.createGain();
       osc.connect(g);g.connect(c.destination);osc.type='sine';
@@ -184,10 +184,11 @@ h1 {
   function rewindFX() {
     const c=ctx(),t=c.currentTime,sr=c.sampleRate,dur=.7;
     const buf=c.createBuffer(1,sr*dur,sr),d=buf.getChannelData(0);
+    let phase=0;
     for(let i=0;i<d.length;i++){
       const prog=i/d.length;
-      const chirpFreq=800+prog*2400;
-      d[i]=(Math.random()*2-1)*.15 + Math.sin(2*Math.PI*chirpFreq*i/sr)*.35*(1-prog*.4);
+      phase += 2*Math.PI*(800+prog*2400)/sr;
+      d[i]=(Math.random()*2-1)*.15 + Math.sin(phase)*.35*(1-prog*.4);
     }
     const src=c.createBufferSource();src.buffer=buf;
     const bpf=c.createBiquadFilter();bpf.type='bandpass';bpf.frequency.value=1200;bpf.Q.value=1.2;
@@ -230,7 +231,7 @@ h1 {
   const nonChaos = SOUNDS.filter(s=>s.fn);
 
   function fireSound(s, btn) {
-    s.fn();
+    try { s.fn(); } catch(e) {}
     npEl.textContent=s.e+'  '+s.l.toUpperCase();
     npEl.classList.remove('active');void npEl.offsetWidth;npEl.classList.add('active');
     btn.classList.remove('playing','pop');void btn.offsetWidth;btn.classList.add('playing','pop');
@@ -250,7 +251,7 @@ h1 {
       if(!s.fn) {
         // CHAOS: fire 4 random sounds in quick bursts
         const picks=[...nonChaos].sort(()=>Math.random()-.5).slice(0,4);
-        picks.forEach((ps,i)=>setTimeout(()=>ps.fn(), i*220));
+        picks.forEach((ps,i)=>setTimeout(()=>{ try{ps.fn();}catch(e){} }, i*220));
         npEl.textContent='🎲  CHAOS MODE';
         npEl.classList.remove('active');void npEl.offsetWidth;npEl.classList.add('active');
         btn.classList.remove('playing','pop');void btn.offsetWidth;btn.classList.add('playing','pop');
