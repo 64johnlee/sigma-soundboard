@@ -21,10 +21,10 @@ h1 {
   -webkit-background-clip:text; background-clip:text; color:transparent;
 }
 .sub { font-size:10px; color:#4a3870; margin-top:3px; font-weight:normal; font-family:system-ui; letter-spacing:2px; text-transform:uppercase; }
-.np-wrap { width:100%; max-width:400px; margin-bottom:10px; text-align:center; min-height:20px; }
-.np { font-size:11px; color:#4a3870; font-family:system-ui; font-style:italic; letter-spacing:.3px; transition:color .2s; }
-@keyframes npglow { 0%{opacity:1} 100%{opacity:.5} }
-.np.active { color:#16f2c8; animation:npglow .6s ease-in-out infinite alternate; }
+.np-wrap { width:100%; max-width:400px; margin-bottom:10px; text-align:center; min-height:28px; }
+.np { font-size:13px; color:#4a3870; font-family:"Arial Black",system-ui; letter-spacing:.5px; transition:color .2s; text-transform:uppercase; }
+@keyframes npglow { 0%{opacity:1;text-shadow:0 0 12px #16f2c8} 100%{opacity:.6;text-shadow:none} }
+.np.active { color:#16f2c8; animation:npglow .5s ease-in-out infinite alternate; font-size:14px; }
 .grid {
   display:grid; grid-template-columns:repeat(4,1fr);
   gap:7px; width:100%; max-width:400px;
@@ -182,16 +182,17 @@ h1 {
   }
 
   function rewindFX() {
-    const c=ctx(),t=c.currentTime,sr=c.sampleRate;
-    const buf=c.createBuffer(1,sr*.5,sr),d=buf.getChannelData(0);
+    const c=ctx(),t=c.currentTime,sr=c.sampleRate,dur=.7;
+    const buf=c.createBuffer(1,sr*dur,sr),d=buf.getChannelData(0);
     for(let i=0;i<d.length;i++){
-      const noise=(Math.random()*2-1)*.3;
-      const sweep=Math.sin(2*Math.PI*i/d.length*8);
-      d[i]=noise*(1-i/d.length)+sweep*.4*(1-i/d.length);
+      const prog=i/d.length;
+      const chirpFreq=800+prog*2400;
+      d[i]=(Math.random()*2-1)*.15 + Math.sin(2*Math.PI*chirpFreq*i/sr)*.35*(1-prog*.4);
     }
     const src=c.createBufferSource();src.buffer=buf;
-    const g=c.createGain();g.gain.value=.7;
-    src.connect(g);g.connect(c.destination);src.start(t);
+    const bpf=c.createBiquadFilter();bpf.type='bandpass';bpf.frequency.value=1200;bpf.Q.value=1.2;
+    const g=c.createGain();g.gain.setValueAtTime(.9,t);g.gain.exponentialRampToValueAtTime(0.001,t+dur);
+    src.connect(bpf);bpf.connect(g);g.connect(c.destination);src.start(t);
   }
 
   function speak(text,p,r){
@@ -219,11 +220,24 @@ h1 {
     {e:'⚡',l:'Sigma',      fn:()=>speak('sigma',.15,.7),        c1:'#4527a055',c2:'#0d002699',ca:'#7e57c288'},
     {e:'🔥',l:'Rizz',       fn:()=>speak('rizz',.5,.85),         c1:'#bf360c55',c2:'#3a0b0099',ca:'#ff704388'},
     {e:'🌀',l:'Ohio',       fn:()=>speak('OHIO!',.2,2.2),        c1:'#b71c1c55',c2:'#2a000099',ca:'#ef535088'},
+    {e:'🎲',l:'Chaos',      fn:null,                             c1:'#00363a55',c2:'#00121599',ca:'#00e5ff88'},
   ];
 
   const npEl=document.getElementById('np');
   const grid=document.getElementById('grid');
   let npTimer=null;
+
+  const nonChaos = SOUNDS.filter(s=>s.fn);
+
+  function fireSound(s, btn) {
+    s.fn();
+    npEl.textContent=s.e+'  '+s.l.toUpperCase();
+    npEl.classList.remove('active');void npEl.offsetWidth;npEl.classList.add('active');
+    btn.classList.remove('playing','pop');void btn.offsetWidth;btn.classList.add('playing','pop');
+    if(npTimer)clearTimeout(npTimer);
+    npTimer=setTimeout(()=>{npEl.classList.remove('active');npEl.textContent='tap any sound to activate';},3000);
+    setTimeout(()=>btn.classList.remove('playing','pop'),500);
+  }
 
   SOUNDS.forEach(s=>{
     const btn=document.createElement('button');
@@ -233,13 +247,19 @@ h1 {
     btn.style.setProperty('--ca',s.ca);
     btn.innerHTML=`<span class="icon">${s.e}</span><span class="lbl">${s.l}</span>`;
     btn.addEventListener('pointerdown',()=>{
-      s.fn();
-      npEl.textContent=s.e+'  '+s.l.toUpperCase();
-      npEl.classList.remove('active');void npEl.offsetWidth;npEl.classList.add('active');
-      btn.classList.remove('playing','pop');void btn.offsetWidth;btn.classList.add('playing','pop');
-      if(npTimer)clearTimeout(npTimer);
-      npTimer=setTimeout(()=>{npEl.classList.remove('active');npEl.textContent='tap any sound to activate';},3000);
-      setTimeout(()=>btn.classList.remove('playing','pop'),500);
+      if(!s.fn) {
+        // CHAOS: fire 4 random sounds in quick bursts
+        const picks=[...nonChaos].sort(()=>Math.random()-.5).slice(0,4);
+        picks.forEach((ps,i)=>setTimeout(()=>ps.fn(), i*220));
+        npEl.textContent='🎲  CHAOS MODE';
+        npEl.classList.remove('active');void npEl.offsetWidth;npEl.classList.add('active');
+        btn.classList.remove('playing','pop');void btn.offsetWidth;btn.classList.add('playing','pop');
+        if(npTimer)clearTimeout(npTimer);
+        npTimer=setTimeout(()=>{npEl.classList.remove('active');npEl.textContent='tap any sound to activate';},4000);
+        setTimeout(()=>btn.classList.remove('playing','pop'),500);
+        return;
+      }
+      fireSound(s, btn);
     });
     grid.appendChild(btn);
   });
